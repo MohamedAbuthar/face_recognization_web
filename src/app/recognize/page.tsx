@@ -28,6 +28,8 @@ export default function RecognizePage() {
   const [fps, setFps] = useState(0);
   const [unregisteredFace, setUnregisteredFace] = useState(false);
   const [showUnregisteredDialog, setShowUnregisteredDialog] = useState(false);
+  const [multipleFacesDetected, setMultipleFacesDetected] = useState(false);
+  const [showMultipleFacesDialog, setShowMultipleFacesDialog] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
@@ -128,12 +130,29 @@ export default function RecognizePage() {
         setBoxes(result.boxes);
         setLandmarks(result.landmarks);
         setFaceDetected(result.boxes.length > 0);
+        
+        // Handle multiple faces detection
+        if (result.boxes.length > 1) {
+          setMultipleFacesDetected(true);
+          // Show dialog and pause detection
+          if (!showMultipleFacesDialog) {
+            setShowMultipleFacesDialog(true);
+            // Pause detection loop
+            if (animationFrameRef.current) {
+              cancelAnimationFrame(animationFrameRef.current);
+              animationFrameRef.current = null;
+            }
+          }
+        } else {
+          setMultipleFacesDetected(false);
+        }
 
         // Recognize face every 2 seconds when landmarks are detected
         // Don't recognize if showing unregistered face message
+        // Only recognize if exactly one face is detected
         const timeSinceLastRecognition = timestamp - lastRecognitionTimeRef.current;
         if (
-          result.boxes.length > 0 &&
+          result.boxes.length === 1 &&
           result.landmarks.length > 0 &&
           !loading &&
           !recognizedUser &&
@@ -344,6 +363,13 @@ export default function RecognizePage() {
                               />
                       )}
                           
+                          {multipleFacesDetected && !recognizedUser && (
+                            <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-pulse">
+                              <span className="text-xl">⚠️</span>
+                              <span className="font-medium">Multiple Faces Detected - Show Only One Face</span>
+                            </div>
+                          )}
+
                           {recognizedUser && (
                             <div className="absolute top-4 left-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
                               <span className="text-lg">✓</span>
@@ -351,7 +377,7 @@ export default function RecognizePage() {
                             </div>
                           )}
                           
-                      {faceDetected && !recognizedUser && !error && !unregisteredFace && (
+                      {faceDetected && !recognizedUser && !error && !unregisteredFace && !multipleFacesDetected && (
                             <div className="absolute top-4 left-4 bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
                               <span className="text-lg">🔍</span>
                               <span className="font-medium">Detecting...</span>
@@ -381,7 +407,9 @@ export default function RecognizePage() {
                     <div className="bg-gray-800 px-6 py-4">
                   <div className="text-center">
                     <p className="text-gray-300">
-                        {recognizedUser 
+                        {multipleFacesDetected
+                          ? '⚠️ Multiple faces detected - please show only one face'
+                          : recognizedUser 
                           ? 'Face recognized successfully!' 
                         : faceDetected
                           ? 'Analyzing face...' 
@@ -484,6 +512,49 @@ export default function RecognizePage() {
                       Try Again
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Multiple Faces Dialog */}
+          {showMultipleFacesDialog && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+                <div className="text-center">
+                  <div className="text-6xl mb-4">⚠️</div>
+                  <h2 className="text-2xl font-bold text-gray-800 dark:text-white mb-2">
+                    Multiple Faces Detected
+                  </h2>
+                  <p className="text-gray-600 dark:text-gray-400 mb-6">
+                    Please ensure only one person is visible in the camera frame. Multiple faces cannot be recognized at the same time.
+                  </p>
+                  <div className="mt-6 space-y-3">
+                    <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-400 mb-2">
+                        📋 Instructions
+                      </p>
+                      <ul className="text-xs text-yellow-700 dark:text-yellow-500 text-left space-y-1">
+                        <li>• Make sure only one person is in front of the camera</li>
+                        <li>• Ask others to step out of the frame</li>
+                        <li>• Position yourself in the center of the oval guide</li>
+                      </ul>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowMultipleFacesDialog(false);
+                      setMultipleFacesDetected(false);
+                      // Restart detection loop
+                      if (videoRef.current) {
+                        lastRecognitionTimeRef.current = 0;
+                        startDetectionLoop();
+                      }
+                    }}
+                    className="mt-6 w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+                  >
+                    Got It - Continue
+                  </button>
                 </div>
               </div>
             </div>
